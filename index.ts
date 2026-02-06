@@ -10,8 +10,8 @@ import { randomUUID } from 'node:crypto';
 
 dns.setDefaultResultOrder('ipv4first');
 
-const envPath = new URL('../.env', import.meta.url).pathname;
-dotenv.config({ path: envPath });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
 const app = express();
 const port = process.env.PORT || '3001';
