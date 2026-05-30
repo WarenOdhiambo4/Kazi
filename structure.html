@@ -1,0 +1,659 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{--bo:#E05C1A;--bol:#FDE0CC;--boxl:#FEF3ED;--bod:#A33E0D;}
+.wrap{font-family:var(--font-sans);font-size:11px;color:var(--color-text-primary);}
+.hdr{background:var(--bo);padding:9px 12px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between;}
+.hdr h2{font-size:13px;font-weight:500;color:#fff;}
+.hdr-r{display:flex;gap:14px;}
+.hstat{text-align:center;}
+.hstat .v{font-size:15px;font-weight:500;color:#fff;line-height:1;}
+.hstat .l{font-size:8px;color:rgba(255,255,255,.7);}
+.base-row{background:#141210;padding:5px 12px;display:flex;align-items:center;gap:8px;}
+.base-lbl{font-size:9px;color:rgba(255,255,255,.5);}
+.base-id{font-family:monospace;font-size:10px;color:#F79A67;letter-spacing:.04em;}
+.issues-bar{background:#FCEBEB;border-bottom:1px solid #f5c0c0;padding:6px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.issue-chip{display:inline-flex;align-items:center;gap:4px;font-size:9px;padding:2px 8px;border-radius:10px;background:#fff;border:0.5px solid #f5c0c0;cursor:pointer;color:#791F1F;}
+.issues-lbl{font-size:9px;font-weight:500;color:#791F1F;}
+.dtabs{display:flex;overflow-x:auto;background:var(--color-background-secondary);border-bottom:1px solid var(--color-border-tertiary);}
+.dtab{padding:6px 11px;font-size:9.5px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;color:var(--color-text-secondary);flex-shrink:0;transition:all .1s;}
+.dtab.on{border-bottom-color:var(--bo);color:var(--bo);font-weight:500;background:var(--color-background-primary);}
+.dtab:hover:not(.on){background:var(--boxl);}
+.body{display:flex;height:470px;overflow:hidden;background:var(--color-background-primary);}
+.table-list{width:220px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--color-border-tertiary);}
+.trow{padding:6px 10px;cursor:pointer;border-bottom:0.5px solid var(--color-border-tertiary);transition:background .1s;display:flex;align-items:center;gap:6px;}
+.trow:hover{background:var(--boxl);}
+.trow.sel{background:var(--boxl);border-left:2px solid var(--bo);}
+.trow-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.trow-name{font-size:10px;font-weight:500;flex:1;color:var(--color-text-primary);}
+.trow-fc{font-size:8px;color:var(--color-text-secondary);}
+.trow-issue{font-size:9px;}
+.detail{flex:1;overflow-y:auto;padding:12px;}
+.d-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-secondary);font-size:11px;flex-direction:column;gap:8px;}
+.d-empty .arrow{font-size:24px;color:var(--bol);}
+.d-hdr{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--color-border-tertiary);}
+.d-name{font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px;}
+.d-id{font-family:monospace;font-size:9px;color:var(--color-text-secondary);}
+.d-meta{display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;}
+.d-meta-chip{display:inline-flex;align-items:center;gap:3px;font-size:8px;padding:2px 7px;border-radius:10px;background:var(--color-background-secondary);color:var(--color-text-secondary);}
+.d-purpose{font-size:10px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.4;}
+.d-issues{margin-bottom:10px;}
+.d-issue-row{display:flex;align-items:flex-start;gap:5px;padding:5px 7px;background:#FCEBEB;border-radius:5px;margin-bottom:4px;font-size:9px;color:#791F1F;}
+.fields-hdr{font-size:8.5px;font-weight:500;color:var(--color-text-secondary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px;}
+table.ft{width:100%;border-collapse:collapse;}
+.ft th{font-size:8px;font-weight:500;color:var(--color-text-secondary);padding:3px 6px;border-bottom:1px solid var(--color-border-tertiary);text-align:left;}
+.ft td{font-size:9.5px;padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:top;}
+.ft tr:last-child td{border:none;}
+.ft tr:hover td{background:var(--boxl);}
+.ft-type{display:inline-block;padding:1px 5px;border-radius:4px;font-size:8px;font-weight:500;}
+.ft-num{background:#E6F1FB;color:#185FA5;}
+.ft-text{background:#F1EFE8;color:#5E5850;}
+.ft-currency{background:#EAF3DE;color:#3B6D11;}
+.ft-date{background:#EEEDFE;color:#3C3489;}
+.ft-select{background:var(--boxl);color:var(--bod);}
+.ft-formula{background:#FFF3CD;color:#854F0B;}
+.ft-link{background:#FCEBEB;color:#791F1F;}
+.ft-auto{background:#F1EFE8;color:#857E74;}
+.ft-check{background:#F5F4F2;color:#5E5850;}
+.ft-ph{background:#E6F1FB;color:#0F6E56;}
+.note-cell{font-size:8px;color:var(--color-text-secondary);font-style:italic;}
+.key-badge{background:var(--bo);color:#fff;font-size:7px;padding:0 4px;border-radius:3px;margin-left:3px;}
+.fx-fail{color:#791F1F;font-size:8px;}
+.section-lbl{font-size:8px;font-weight:500;color:var(--color-text-secondary);background:var(--color-background-secondary);padding:4px 10px;border-bottom:0.5px solid var(--color-border-tertiary);letter-spacing:.05em;text-transform:uppercase;position:sticky;top:0;z-index:1;}
+</style>
+
+<div class="wrap">
+<div class="hdr">
+  <h2>Layer 1 · Records &amp; Database Architecture</h2>
+  <div class="hdr-r">
+    <div class="hstat"><div class="v">44</div><div class="l">Tables</div></div>
+    <div class="hstat"><div class="v">410+</div><div class="l">Fields</div></div>
+    <div class="hstat"><div class="v">47</div><div class="l">Relations</div></div>
+    <div class="hstat"><div class="v">10</div><div class="l">Domains</div></div>
+  </div>
+</div>
+<div class="base-row">
+  <span class="base-lbl">Airtable Base ID</span>
+  <span class="base-id">appBi5gDt0xGCNQGJ</span>
+  <span class="base-lbl" style="margin-left:12px">API</span>
+  <span class="base-id">https://api.airtable.com/v0/appBi5gDt0xGCNQGJ/{TableName}</span>
+</div>
+<div class="issues-bar">
+  <span class="issues-lbl">⚠ 4 Schema Issues Detected:</span>
+  <span class="issue-chip" onclick="selTable('Customer')">🔴 Customer.averageOrderValue — formula failed</span>
+  <span class="issue-chip" onclick="selTable('PurchaseOrder')">🔴 PurchaseOrder.totalOrderValueIncFreight — formula failed</span>
+  <span class="issue-chip" onclick="selTable('PurchaseOrder')">🔴 PurchaseOrder.totalQuantityRemaining — formula failed</span>
+  <span class="issue-chip" onclick="selTable('Table 1')">🟡 "Table 1" default table still exists — delete it</span>
+</div>
+
+<div class="dtabs" id="dtabs"></div>
+<div class="body">
+  <div class="table-list" id="tlist"></div>
+  <div class="detail" id="detail">
+    <div class="d-empty"><div class="arrow">←</div><div>Select a table to view its complete schema</div></div>
+  </div>
+</div>
+</div>
+
+<script>
+const DOMAINS=[
+  {name:'Master Data',color:'#E05C1A',tables:[
+    {name:'Company',id:'tblrmxcv3yI0AKbkD',purpose:'Root legal entity. One row per company. Root of entire system.',
+     fields:[
+      {n:'companyId',t:'num',note:'Primary key — autoNumber'},
+      {n:'companyName',t:'text',note:'e.g. Paroha Investment Limited',key:true},
+      {n:'companyTradingName',t:'text'},
+      {n:'companyRegistrationNumber',t:'text'},
+      {n:'companyKraPin',t:'text',note:'Kenya Revenue Authority PIN'},
+      {n:'companyVatNumber',t:'text'},
+      {n:'companyPhysicalAddress',t:'text'},
+      {n:'companyCity',t:'text'},{n:'companyCountry',t:'text',note:'Default: Kenya'},
+      {n:'companyPhoneNumber',t:'phone'},{n:'companyEmail',t:'email'},{n:'companyWebsite',t:'text'},
+      {n:'companyCurrencyCode',t:'text',note:'Default: KES'},
+      {n:'companyFiscalYearStartMonth',t:'num'},
+      {n:'companyStatus',t:'select',note:'active | suspended | closed'},
+      {n:'companyRegistrationDate',t:'date'},
+      {n:'totalBusinessUnits',t:'num',note:'Computed count'},
+      {n:'totalEmployeeCount',t:'num',note:'Computed count'},
+      {n:'createdAt',t:'auto'},{n:'updatedAt',t:'auto'},
+      {n:'BusinessUnits',t:'link',note:'→ tblDTuzHT4Yd2s7b1'},
+      {n:'PayrollRun',t:'link',note:'→ tbluXxo0nPbHALg0L'},
+     ],issues:[]},
+    {name:'BusinessUnit',id:'tblDTuzHT4Yd2s7b1',purpose:'Each branch/store. CENTRAL HUB — links to 24 other tables. All financial and inventory data is scoped here.',
+     fields:[
+      {n:'businessUnitId',t:'num',key:true},{n:'businessUnitName',t:'text',key:true},
+      {n:'businessUnitCode',t:'text',note:'e.g. NBO-001'},
+      {n:'companyId',t:'link',note:'→ Company tblrmxcv3yI0AKbkD'},
+      {n:'businessUnitType',t:'select',note:'retail_store|warehouse|head_office|depot|kiosk'},
+      {n:'businessUnitStatus',t:'select',note:'active|inactive|closed'},
+      {n:'businessUnitPhysicalAddress',t:'text'},{n:'businessUnitCity',t:'text'},
+      {n:'businessUnitPhoneNumber',t:'phone'},{n:'businessUnitEmail',t:'email'},
+      {n:'businessUnitMonthlyRentAmount',t:'currency'},
+      {n:'businessUnitOpeningDate',t:'date'},
+      {n:'totalCumulativeSales',t:'currency',note:'Rollup'},
+      {n:'totalCumulativeExpenses',t:'currency',note:'Rollup'},
+      {n:'+ 24 linked tables',t:'link',note:'Employee, SystemUser, InventoryStock, SalesTransaction, PurchaseOrder, DebtorAccount, ExpenseAccount, RentAccount, SalesAccount, AssetAccount, FinanceJournalEntry, NotificationLog, SystemAuditLog, ...'},
+     ],issues:[]},
+    {name:'Category',id:'tblFI7n9k06BwScTL',purpose:'Product groupings. Every product belongs to one category. Supports sub-categories via self-link.',
+     fields:[
+      {n:'categoryId',t:'num',key:true},{n:'categoryName',t:'text',key:true},
+      {n:'categoryCode',t:'text',note:'e.g. BEV, FOOD, CLEAN'},
+      {n:'categoryDescription',t:'text'},
+      {n:'parentCategoryId',t:'link',note:'→ Self (sub-categories)'},
+      {n:'categoryStatus',t:'select',note:'active|inactive'},
+      {n:'createdAt',t:'auto'},
+      {n:'Products',t:'link',note:'→ Product tbleEIOLaQ9F05JA5'},
+     ],issues:[]},
+    {name:'Product',id:'tbleEIOLaQ9F05JA5',purpose:'Master product catalogue. Every item sold or purchased lives here.',
+     fields:[
+      {n:'productId',t:'num',key:true},{n:'productName',t:'text',key:true},
+      {n:'productCode',t:'text',note:'e.g. BEV-001'},{n:'productBarcode',t:'text'},
+      {n:'categoryId',t:'link',note:'→ Category tblFI7n9k06BwScTL'},
+      {n:'unitOfMeasure',t:'select',note:'pieces|kg|litres|boxes|cartons|grams|ml'},
+      {n:'currentSellingPrice',t:'currency',key:true},{n:'currentPurchasePrice',t:'currency',key:true},
+      {n:'currentGrossMarginPercent',t:'formula',note:'(sellingPrice-purchasePrice)/sellingPrice*100'},
+      {n:'reorderLevel',t:'num'},{n:'reorderQuantity',t:'num'},
+      {n:'productStatus',t:'select',note:'active|discontinued|out_of_stock|pending'},
+      {n:'totalQuantitySold',t:'num',note:'Rollup'},{n:'totalRevenueGenerated',t:'currency',note:'Rollup'},
+      {n:'SalesTransactionItem',t:'link'},{n:'PurchaseOrderItem',t:'link'},
+      {n:'InventoryStock',t:'link'},{n:'AssetAccount',t:'link'},
+     ],issues:[]},
+  ]},
+  {name:'Access Control',color:'#403B35',tables:[
+    {name:'UserRole',id:'tblTlrrI4fByA4BOl',purpose:'8 role definitions for RBAC. Pre-seeded: SystemAdministrator, RegionalManager, BusinessUnitManager, HROfficer, FinanceOfficer, SalesCashier, InventoryOfficer, ReadOnlyAuditor.',
+     fields:[
+      {n:'roleId',t:'num',key:true},{n:'roleName',t:'text',key:true},
+      {n:'roleDescription',t:'text'},{n:'isSystemRole',t:'check'},
+      {n:'userCountInRole',t:'num',note:'Count rollup'},
+      {n:'linkedSystemUsers',t:'link',note:'→ SystemUser tblLKkenvm7ysE0H0'},
+      {n:'linkedRolePermissions',t:'link',note:'→ RolePermission tblBd1iBBHbpq3nD5'},
+     ],issues:[]},
+    {name:'SystemUser',id:'tblLKkenvm7ysE0H0',purpose:'Every login account. Foundation for RBAC, audit trails, session management. Links to Employee for HR record.',
+     fields:[
+      {n:'userId',t:'num',key:true},{n:'firstName',t:'text'},{n:'lastName',t:'text'},
+      {n:'fullName',t:'formula',note:'firstName & " " & lastName'},
+      {n:'emailAddress',t:'email',key:true},{n:'phoneNumber',t:'phone'},
+      {n:'userRoleId',t:'link',note:'→ UserRole tblTlrrI4fByA4BOl'},
+      {n:'businessUnitId',t:'link',note:'→ BusinessUnit tblDTuzHT4Yd2s7b1'},
+      {n:'accountStatus',t:'select',note:'active|suspended|pending|locked'},
+      {n:'failedLoginCount',t:'num',note:'Lock at 3'},
+      {n:'lastFailedLoginAt',t:'datetime'},{n:'lastSuccessfulLoginAt',t:'datetime'},
+      {n:'twoFactorEnabled',t:'check'},{n:'mustChangePassword',t:'check'},
+      {n:'Employee',t:'link',note:'→ Employee tblBnBVuyW1hmgQiE (1:1)'},
+     ],issues:[]},
+    {name:'RolePermission',id:'tblBd1iBBHbpq3nD5',purpose:'Granular permission matrix. What each role can do per table. canRead, canCreate, canUpdate, canDelete, canApprove, canExport.',
+     fields:[
+      {n:'permissionId',t:'num'},{n:'roleId',t:'link',note:'→ UserRole'},
+      {n:'resourceName',t:'text',note:'e.g. SalesTransaction, LoanAccount'},
+      {n:'canRead',t:'check'},{n:'canCreate',t:'check'},
+      {n:'canUpdate',t:'check'},{n:'canDelete',t:'check'},
+      {n:'canApprove',t:'check'},{n:'canExport',t:'check'},
+     ],issues:[]},
+    {name:'UserSession',id:'tblpZDU6fPzc5q4Ho',purpose:'Every login session. Security audit and concurrent session detection.',
+     fields:[
+      {n:'sessionId',t:'text',note:'UUID — Primary'},
+      {n:'userId',t:'link',note:'→ SystemUser tblLKkenvm7ysE0H0'},
+      {n:'ipAddress',t:'text'},{n:'deviceType',t:'select',note:'mobile|desktop|tablet|unknown'},
+      {n:'loginAt',t:'datetime'},{n:'lastActiveAt',t:'datetime'},{n:'logoutAt',t:'datetime'},
+      {n:'sessionDurationSeconds',t:'num'},
+      {n:'logoutReason',t:'select',note:'user_logout|timeout|forced|password_change'},
+     ],issues:[]},
+    {name:'LoginAuditLog',id:'tbl8evdmC4ChOGYyQ',purpose:'Immutable log of every login attempt. Powers brute force detection. Never delete rows.',
+     fields:[
+      {n:'auditLogId',t:'num'},{n:'userId',t:'link',note:'→ SystemUser'},
+      {n:'attemptedEmailOrPhone',t:'text'},{n:'ipAddress',t:'text'},
+      {n:'attemptResult',t:'select',note:'success|wrong_password|account_locked|not_found|blocked_ip'},
+      {n:'attemptedAt',t:'datetime'},{n:'userAgent',t:'text'},
+     ],issues:[]},
+    {name:'OtpStore',id:'(check base)',purpose:'OTP codes for 2FA login. Auto-expires after 10 minutes. isUsed flag prevents replay attacks.',
+     fields:[
+      {n:'otpStoreId',t:'num'},{n:'identifier',t:'text',note:'phone or email'},
+      {n:'hashedOtp',t:'text',note:'bcrypt hashed — NEVER store plain OTP'},
+      {n:'deliveryChannel',t:'select',note:'sms|email'},
+      {n:'expiresAt',t:'datetime',key:true},{n:'isUsed',t:'check',key:true},
+      {n:'usedAt',t:'datetime'},{n:'createdAt',t:'auto'},
+     ],issues:[]},
+  ]},
+  {name:'HR',color:'#185FA5',tables:[
+    {name:'Employee',id:'tblBnBVuyW1hmgQiE',purpose:'Complete HR record for every person on payroll. Links to SystemUser (login), LoanAccount, SalaryAccount, EmployeeAttendance.',
+     fields:[
+      {n:'employeeId',t:'num',key:true},{n:'employeeNumber',t:'text',note:'e.g. EMP-0042'},
+      {n:'fullName',t:'formula',note:'firstName & " " & lastName'},
+      {n:'businessUnitId',t:'link'},{n:'systemUserId',t:'link',note:'→ SystemUser (1:1)'},
+      {n:'nationalIdNumber',t:'text'},{n:'kraPin',t:'text'},{n:'nssfNumber',t:'text'},{n:'nhifNumber',t:'text'},
+      {n:'phoneNumber',t:'phone',key:true},{n:'emailAddress',t:'text'},
+      {n:'department',t:'select',note:'Sales|Finance|HR|Operations|Management|IT|Procurement'},
+      {n:'employmentType',t:'select',note:'permanent|contract|casual|intern|part_time'},
+      {n:'baseSalary',t:'currency',key:true},{n:'employmentStatus',t:'select',note:'active|resigned|terminated|suspended|on_leave'},
+      {n:'mpesaPhoneNumber',t:'phone'},{n:'bankAccountNumber',t:'text'},
+      {n:'totalLoanBalance',t:'currency',note:'Rollup from LoanAccount'},
+     ],issues:[{type:'warn',msg:'department field is missing "Inventory" option — add it to match original spec'}]},
+    {name:'EmployeeContract',id:'tbly6uop7jFvLbyNB',purpose:'All employment contracts. n8n checks contractEndDate daily and alerts 30 days before expiry.',
+     fields:[
+      {n:'contractId',t:'num'},{n:'employeeId',t:'link',note:'→ Employee'},
+      {n:'contractType',t:'select',note:'permanent|fixed_term|casual|probation|internship'},
+      {n:'contractStartDate',t:'date'},{n:'contractEndDate',t:'date',key:true},
+      {n:'contractedSalary',t:'currency'},{n:'jobTitleOnContract',t:'text'},
+      {n:'contractStatus',t:'select',note:'draft|active|expired|terminated|renewed'},
+      {n:'renewalReminderSentAt',t:'datetime'},
+     ],issues:[]},
+    {name:'LoanAccount',id:'tblo4sUvUyANJDwB7',purpose:'Employee loans with full repayment tracking. outstandingBalance is a live formula. Limit: 2× monthly salary.',
+     fields:[
+      {n:'loanId',t:'num'},{n:'employeeId',t:'link'},{n:'loanReferenceNumber',t:'text',note:'LOAN-YYYY-XXXX'},
+      {n:'loanAmount',t:'currency',key:true},{n:'interestRatePercent',t:'percent'},
+      {n:'repaymentPeriodMonths',t:'num'},{n:'monthlyRepaymentAmount',t:'currency'},
+      {n:'totalAmountRepaid',t:'currency',note:'Rollup'},
+      {n:'outstandingBalance',t:'formula',note:'loanAmount - totalAmountRepaid',key:true},
+      {n:'loanStatus',t:'select',note:'pending_approval|active|fully_repaid|defaulted|written_off|rejected'},
+      {n:'approvedByUserId',t:'link'},
+      {n:'LoanRepaymentSchedule',t:'link',note:'→ tblfuO7jXm8sZgi4z'},
+     ],issues:[]},
+    {name:'LoanRepaymentSchedule',id:'tblfuO7jXm8sZgi4z',purpose:'One row per installment. n8n reads this on 1st of month and deducts from payroll.',
+     fields:[
+      {n:'scheduleEntryId',t:'num'},{n:'loanId',t:'link'},{n:'employeeId',t:'link'},
+      {n:'installmentNumber',t:'num',note:'e.g. 3 of 12'},
+      {n:'scheduledPaymentDate',t:'date',key:true},{n:'scheduledAmount',t:'currency'},
+      {n:'principalComponent',t:'currency'},{n:'interestComponent',t:'currency'},
+      {n:'actualAmountDeducted',t:'currency'},{n:'balanceAfterPayment',t:'currency'},
+      {n:'paymentStatus',t:'select',note:'pending|paid|partial|skipped|waived'},
+      {n:'statementSmsSentAt',t:'datetime'},
+     ],issues:[{type:'warn',msg:'linkedSalaryEntryId field from original spec is missing — add link to SalaryAccount'}]},
+    {name:'EmployeeAttendance',id:'tblqbGSjj1XZLfaX1',purpose:'Daily check-in/checkout records. Late arrivals and absences trigger SMS at 09:30.',
+     fields:[
+      {n:'attendanceId',t:'num'},{n:'employeeId',t:'link'},{n:'businessUnitId',t:'link'},
+      {n:'attendanceDate',t:'date',key:true},{n:'checkInTime',t:'text'},{n:'checkOutTime',t:'text'},
+      {n:'hoursWorked',t:'num'},{n:'overtimeHours',t:'num'},
+      {n:'attendanceStatus',t:'select',note:'present|absent|half_day|late|on_leave|public_holiday'},
+      {n:'lateArrivalMinutes',t:'num'},{n:'recordedByUserId',t:'link'},
+     ],issues:[]},
+  ]},
+  {name:'People',color:'#0F6E56',tables:[
+    {name:'Customer',id:'tblTIPeb585fdOiqx',purpose:'Every buyer. Phone is MANDATORY — all SMS campaigns depend on it. Powers lifetime value, debtor, and deposit tracking.',
+     fields:[
+      {n:'customerId',t:'num',key:true},{n:'fullName',t:'formula'},
+      {n:'phoneNumber',t:'phone',key:true,note:'MANDATORY — Kenyan format: 07XXXXXXXX'},
+      {n:'customerType',t:'select',note:'individual|business|wholesaler|retailer'},
+      {n:'businessUnitId',t:'link',note:'Acquiring branch'},
+      {n:'purchaseFrequencyCategory',t:'select',note:'frequent|occasional|one_time|dormant|new'},
+      {n:'outstandingDebtBalance',t:'num',note:'Rollup from DebtorAccount — NOT in real schema, must add'},
+      {n:'averageOrderValue',t:'formula',note:'⚠ FORMULA FAILED — fix: totalLifetimePurchaseAmount/totalTransactionCount',key:true},
+      {n:'preferredPaymentMethod',t:'select',note:'cash|mpesa|bank_transfer|credit'},
+      {n:'smsOptIn',t:'check',note:'Default true'},{n:'customerStatus',t:'select',note:'active|inactive|blacklisted'},
+      {n:'SalesTransaction',t:'link'},{n:'DebtorAccount',t:'link'},{n:'PartialDepositAccount',t:'link'},
+     ],issues:[{type:'error',msg:'averageOrderValue formula failed: "Unable to generate formula" — fix: totalLifetimePurchaseAmount / totalTransactionCount (requires rollup fields to be added first)'}]},
+    {name:'Supplier',id:'tblROUE6bR8J2ijvu',purpose:'All suppliers. Reliability scores tracked. Links to PurchaseOrder, ProductPriceHistory, DeliveryAccount.',
+     fields:[
+      {n:'supplierId',t:'num',key:true},{n:'supplierName',t:'text',key:true},
+      {n:'supplierCode',t:'text',note:'SUP-XXXX'},{n:'contactPersonPhone',t:'phone'},
+      {n:'paymentTermsDays',t:'num',note:'Net-30, Net-60'},
+      {n:'totalOrdersPlaced',t:'num',note:'Count rollup'},
+      {n:'onTimeDeliveryRate',t:'percent',note:'Computed'},
+      {n:'supplierStatus',t:'select',note:'active|inactive|blacklisted'},
+      {n:'PurchaseOrder',t:'link'},{n:'ProductPriceHistory',t:'link'},{n:'DeliveryAccount',t:'link'},
+     ],issues:[]},
+  ]},
+  {name:'Inventory',color:'#3B6D11',tables:[
+    {name:'ProductPriceHistory',id:'tbl2p8cBVBJbC3P54',purpose:'Immutable price change log. Triggers customer SMS alerts. Powers FIFO profit calculation. Never delete.',
+     fields:[
+      {n:'priceHistoryId',t:'num'},{n:'productId',t:'link'},{n:'supplierId',t:'link'},
+      {n:'previousPurchasePrice',t:'currency'},{n:'newPurchasePrice',t:'currency'},
+      {n:'previousSellingPrice',t:'currency'},{n:'newSellingPrice',t:'currency'},
+      {n:'priceDifference',t:'formula',note:'newSellingPrice - newPurchasePrice'},
+      {n:'priceChangeDirection',t:'select',note:'increase|decrease|no_change'},
+      {n:'fifoValueOfExistingStock',t:'currency'},{n:'smsSentToCustomers',t:'check'},
+      {n:'customerNotificationCount',t:'num'},{n:'detectedBySystem',t:'check'},
+     ],issues:[]},
+    {name:'InventoryStock',id:'tbl1U387QsNX2Acr0',purpose:'Current stock per product per branch. Single source of truth. NEVER update quantityOnHand directly — only via InventoryLedger + n8n.',
+     fields:[
+      {n:'stockId',t:'num'},{n:'businessUnitId',t:'link'},{n:'productId',t:'link'},
+      {n:'quantityOnHand',t:'num',key:true},{n:'quantityReserved',t:'num'},
+      {n:'quantityAvailable',t:'formula',note:'quantityOnHand - quantityReserved'},
+      {n:'lastMovementDate',t:'date'},{n:'lastStockCountDate',t:'date'},
+      {n:'varianceFromLastCount',t:'formula',note:'quantityOnHand - lastStockCountQuantity'},
+      {n:'updatedAt',t:'auto'},
+     ],issues:[]},
+    {name:'InventoryLedger',id:'tbliXFcfTMAXpe2rX',purpose:'Every stock movement ever. One row = one transaction in/out. Source of truth for InventoryStock. Theft detection depends on this.',
+     fields:[
+      {n:'ledgerEntryId',t:'num'},{n:'businessUnitId',t:'link'},{n:'productId',t:'link'},
+      {n:'movementType',t:'select',key:true,note:'purchase_received|sale|adjustment|transfer_in|transfer_out|opening_balance|damage|theft_write_off|return_to_supplier'},
+      {n:'quantityChange',t:'num',note:'+ = in, - = out'},{n:'quantityBefore',t:'num'},{n:'quantityAfter',t:'num'},
+      {n:'unitCost',t:'currency'},{n:'totalMovementValue',t:'currency'},
+      {n:'authorisedByUserId',t:'link'},{n:'createdByUserId',t:'link'},
+     ],issues:[]},
+    {name:'InventorySnapshot',id:'tblQdq1NcAw1AzQR0',purpose:'Monthly stock valuation photo. Used for balance sheet and FIFO. Created by n8n on last day of month.',
+     fields:[
+      {n:'snapshotId',t:'num'},{n:'businessUnitId',t:'link'},{n:'productId',t:'link'},
+      {n:'snapshotDate',t:'date'},{n:'quantityOnHand',t:'num'},{n:'unitCostAtSnapshot',t:'currency'},
+      {n:'totalInventoryValue',t:'formula',note:'quantityOnHand * unitCostAtSnapshot'},
+      {n:'snapshotType',t:'select',note:'daily|weekly|monthly|annual|adhoc'},
+     ],issues:[]},
+  ]},
+  {name:'Orders',color:'#854F0B',tables:[
+    {name:'PurchaseOrder',id:'tbla3uBOYN7VXco2N',purpose:'Every order placed with a supplier. Supports partial delivery. POs >KES 50k require RegionalManager approval.',
+     fields:[
+      {n:'purchaseOrderId',t:'num'},{n:'orderReferenceNumber',t:'text',note:'PO-YYYY-XXXXXX'},
+      {n:'businessUnitId',t:'link'},{n:'supplierId',t:'link'},
+      {n:'orderDate',t:'date'},{n:'expectedDeliveryDate',t:'date',key:true},
+      {n:'freightCost',t:'currency'},
+      {n:'totalOrderValueIncFreight',t:'formula',key:true,note:'⚠ FORMULA FAILED — fix: totalOrderValueExFreight + freightCost'},
+      {n:'totalQuantityRemaining',t:'formula',note:'⚠ FORMULA FAILED — fix: totalQuantityOrdered - totalQuantityDelivered'},
+      {n:'orderStatus',t:'select',note:'pending|partial|completed|cancelled'},
+      {n:'approvedByUserId',t:'link'},
+     ],issues:[
+      {type:'error',msg:'totalOrderValueIncFreight formula failed — needs rollup fields totalOrderValueExFreight from PurchaseOrderItem first'},
+      {type:'error',msg:'totalQuantityRemaining formula failed — needs rollup fields totalQuantityOrdered and totalQuantityDelivered from PurchaseOrderItem'},
+     ]},
+    {name:'PurchaseOrderItem',id:'tblYDolqpLDizFnFM',purpose:'Line items within an order. One row per product per order.',
+     fields:[
+      {n:'orderItemId',t:'num'},{n:'purchaseOrderId',t:'link'},{n:'productId',t:'link'},
+      {n:'quantityOrdered',t:'num'},{n:'quantityDelivered',t:'num'},
+      {n:'quantityRemaining',t:'formula',note:'quantityOrdered - quantityDelivered'},
+      {n:'unitPurchasePrice',t:'currency'},{n:'lineTotalValue',t:'formula',note:'quantityOrdered * unitPurchasePrice'},
+      {n:'deliveryStatus',t:'select',note:'pending|partial|delivered|cancelled'},
+     ],issues:[]},
+    {name:'PurchaseOrderDelivery',id:'tbljhHyxi42BFMOPA',purpose:'Each delivery batch. One PO can have many partial deliveries.',
+     fields:[
+      {n:'deliveryId',t:'num'},{n:'purchaseOrderId',t:'link'},{n:'businessUnitId',t:'link'},
+      {n:'deliveryDate',t:'date'},{n:'deliveryReferenceNumber',t:'text'},
+      {n:'vehicleRegistrationNumber',t:'text'},{n:'driverName',t:'text'},{n:'driverIdNumber',t:'text'},
+      {n:'partialFreightCost',t:'currency'},{n:'receivedByUserId',t:'link'},
+     ],issues:[]},
+    {name:'PurchaseOrderDeliveryItem',id:'tblDoRKWdGJjxQ8fU',purpose:'Products within each delivery batch. Enables FIFO costing per batch.',
+     fields:[
+      {n:'deliveryItemId',t:'num'},{n:'deliveryId',t:'link'},{n:'orderItemId',t:'link'},
+      {n:'productId',t:'link'},{n:'quantityDeliveredThisBatch',t:'num'},
+      {n:'unitPurchasePrice',t:'currency'},{n:'lineTotalValue',t:'formula',note:'quantityDeliveredThisBatch * unitPurchasePrice'},
+     ],issues:[]},
+  ]},
+  {name:'Sales',color:'#993C1D',tables:[
+    {name:'SalesTarget',id:'tblFdJHz6VwwaOhlP',purpose:'Monthly revenue targets per branch. Set by RegionalManager at start of month.',
+     fields:[
+      {n:'targetId',t:'num'},{n:'businessUnitId',t:'link'},
+      {n:'targetYear',t:'num'},{n:'targetMonth',t:'num',note:'1-12'},
+      {n:'targetRevenueAmount',t:'currency',key:true},
+      {n:'targetTransactionCount',t:'num'},{n:'targetNewCustomerCount',t:'num'},
+      {n:'setByUserId',t:'link'},
+     ],issues:[]},
+    {name:'SalesTransaction',id:'tblSxHCeySplinNxa',purpose:'Every sale. The revenue engine. One row = one receipt. Source of all revenue data.',
+     fields:[
+      {n:'salesTransactionId',t:'num'},{n:'transactionReference',t:'text',key:true,note:'TXN-XXXXXXX'},
+      {n:'businessUnitId',t:'link'},{n:'customerId',t:'link',note:'null for walk-in'},
+      {n:'salesAgentUserId',t:'link'},{n:'transactionDate',t:'date'},{n:'transactionTime',t:'text'},
+      {n:'totalAmount',t:'currency',key:true},{n:'totalCostOfGoodsSold',t:'currency'},
+      {n:'grossProfitAmount',t:'formula',note:'totalAmount - totalCOGS'},
+      {n:'grossProfitPercent',t:'formula'},
+      {n:'paymentMethod',t:'select',key:true,note:'cash|mpesa|bank_transfer|credit|partial_deposit|mixed'},
+      {n:'mpesaTransactionCode',t:'text',note:'MANDATORY if paymentMethod=mpesa'},
+      {n:'transactionStatus',t:'select',note:'completed|void|refunded|partial|pending'},
+      {n:'SalesTransactionItem',t:'link'},{n:'DebtorAccount',t:'link'},
+     ],issues:[]},
+    {name:'SalesTransactionItem',id:'tblLgmiBBvsazvlGd',purpose:'Line items per sale. FIFO profit calculated here. unitPurchasePrice MUST come from oldest stock batch.',
+     fields:[
+      {n:'salesItemId',t:'num'},{n:'salesTransactionId',t:'link'},{n:'productId',t:'link'},
+      {n:'quantitySold',t:'num'},{n:'unitSellingPrice',t:'currency'},
+      {n:'unitPurchasePrice',t:'currency',key:true,note:'FIFO cost — from oldest batch'},
+      {n:'fifoLayerDate',t:'date',note:'Which batch this came from'},
+      {n:'lineTotalAmount',t:'formula',note:'lineSubtotal - lineDiscount'},
+      {n:'lineCostOfGoodsSold',t:'formula',note:'quantitySold * unitPurchasePrice'},
+      {n:'lineGrossProfit',t:'formula'},{n:'lineGrossProfitPercent',t:'formula'},
+     ],issues:[]},
+    {name:'SalesDailyCheck',id:'tblkWkXH0KyQy3jGa',purpose:'Nightly audit table. n8n creates one row per branch per day at 22:00. Missing sales detection.',
+     fields:[
+      {n:'checkId',t:'num'},{n:'businessUnitId',t:'link'},{n:'checkDate',t:'date'},
+      {n:'dayOfWeek',t:'text'},{n:'isWeekend',t:'check'},{n:'isSunday',t:'check'},
+      {n:'isPublicHoliday',t:'check'},{n:'salesRecordExists',t:'check',key:true},
+      {n:'transactionCount',t:'num'},{n:'totalRevenue',t:'currency'},
+      {n:'alertTriggered',t:'check',key:true},{n:'alertSentAt',t:'datetime'},
+      {n:'alertResolvedAt',t:'datetime'},{n:'resolutionNotes',t:'text'},
+     ],issues:[]},
+  ]},
+  {name:'Debtors',color:'#3C3489',tables:[
+    {name:'DebtorAccount',id:'tblyuZyYzer7CboO3',purpose:'Customers who owe money OR have deposits pending. Reminder SMS fires every 7 days after 14 days overdue.',
+     fields:[
+      {n:'debtorAccountId',t:'num'},{n:'customerId',t:'link'},{n:'businessUnitId',t:'link'},
+      {n:'accountType',t:'select',key:true,note:'credit_sale | partial_deposit'},
+      {n:'originalTransactionId',t:'link',note:'→ SalesTransaction'},
+      {n:'originalAmount',t:'currency'},{n:'amountPaid',t:'currency',note:'Rollup from DebtorPayment'},
+      {n:'outstandingBalance',t:'formula',key:true,note:'originalAmount - amountPaid'},
+      {n:'expectedCollectionDate',t:'date'},{n:'lastReminderSentAt',t:'datetime'},
+      {n:'reminderCount',t:'num',note:'Escalate to manager when ≥ 3'},
+      {n:'accountStatus',t:'select',note:'open|partially_paid|fully_paid|written_off|refunded'},
+      {n:'DebtorPayment',t:'link'},
+     ],issues:[]},
+    {name:'DebtorPayment',id:'tblt3CsdfIo2D55gY',purpose:'Every payment against a debt. Each payment updates outstanding balance via rollup.',
+     fields:[
+      {n:'debtorPaymentId',t:'num'},{n:'debtorAccountId',t:'link'},
+      {n:'paymentDate',t:'date'},{n:'amountPaid',t:'currency',key:true},
+      {n:'paymentMethod',t:'select',note:'cash|mpesa|bank_transfer'},
+      {n:'mpesaTransactionCode',t:'text'},{n:'balanceAfterPayment',t:'currency'},
+      {n:'recordedByUserId',t:'link'},
+     ],issues:[]},
+    {name:'PartialDepositAccount',id:'tblTuqx8k9782JqRd',purpose:'Advance payments from customers. This is a LIABILITY until goods collected. Shows on balance sheet as 2100 Partial Deposits Held.',
+     fields:[
+      {n:'depositEntryId',t:'num'},{n:'depositReferenceNumber',t:'text',note:'DEP-YYYY-XXXXXX'},
+      {n:'customerId',t:'link'},{n:'businessUnitId',t:'link'},
+      {n:'depositAmount',t:'currency',key:true},{n:'amountRedeemed',t:'currency'},
+      {n:'amountRemaining',t:'formula',key:true,note:'depositAmount - amountRedeemed'},
+      {n:'depositStatus',t:'select',note:'active|partially_redeemed|fully_redeemed|refunded|expired'},
+      {n:'expectedCollectionDate',t:'date'},{n:'reminderCount',t:'num'},
+     ],issues:[]},
+  ]},
+  {name:'Finance',color:'#7A2E08',tables:[
+    {name:'PayrollRun',id:'tbluXxo0nPbHALg0L',purpose:'Master record per payroll cycle. n8n auto-creates on 25th of every month. RegionalManager approves.',
+     fields:[
+      {n:'payrollRunId',t:'num'},{n:'companyId',t:'link'},
+      {n:'payPeriodLabel',t:'text',note:'e.g. 2026-05'},
+      {n:'runType',t:'select',note:'regular|supplementary|bonus|off_cycle'},
+      {n:'totalGrossSalary',t:'currency',note:'Rollup'},{n:'totalNetSalaryPayable',t:'currency',note:'Rollup'},
+      {n:'totalPayeDeductions',t:'currency'},{n:'totalLoanDeductions',t:'currency'},
+      {n:'runStatus',t:'select',key:true,note:'draft|pending_approval|approved|posted|paid|cancelled'},
+      {n:'preparedByUserId',t:'link'},{n:'approvedByUserId',t:'link'},
+      {n:'n8nWorkflowRunId',t:'text',note:'Automation tracking ID'},
+      {n:'SalaryAccount',t:'link'},
+     ],issues:[]},
+    {name:'SalaryAccount',id:'tbl27XC7KOYs16rWX',purpose:'One row per employee per month. Auto-created by n8n payroll workflow. Payslip SMS sent on creation.',
+     fields:[
+      {n:'salaryEntryId',t:'num'},{n:'payrollRunId',t:'link'},{n:'employeeId',t:'link'},
+      {n:'basicSalary',t:'currency'},{n:'allowancesTotal',t:'currency'},
+      {n:'grossSalary',t:'formula',key:true,note:'basicSalary + allowancesTotal'},
+      {n:'nssfDeduction',t:'currency'},{n:'nhifDeduction',t:'currency'},
+      {n:'payeDeduction',t:'currency'},{n:'loanDeduction',t:'currency'},
+      {n:'totalDeductions',t:'formula'},{n:'netSalary',t:'formula',key:true,note:'grossSalary - totalDeductions'},
+      {n:'paymentStatus',t:'select',note:'pending|paid|failed'},
+      {n:'payslipSentViaSms',t:'check'},{n:'payslipSentViaEmail',t:'check'},
+     ],issues:[]},
+    {name:'ExpenseAccount',id:'tblUOgeUt0HLOto5D',purpose:'General business expenses. Every insert triggers Slack approval to FinanceOfficer. <50k approved by BUManager, >50k by RegionalManager.',
+     fields:[
+      {n:'expenseEntryId',t:'num'},{n:'businessUnitId',t:'link'},
+      {n:'expenseCategory',t:'select',note:'utilities|office_supplies|marketing|repairs_maintenance|cleaning|security|staff_welfare|printing|subscriptions|professional_fees|travel|miscellaneous'},
+      {n:'expenseAmount',t:'currency',key:true},{n:'expenseDate',t:'date'},
+      {n:'vendorName',t:'text'},{n:'receiptImageUrl',t:'text'},
+      {n:'paymentMethod',t:'select',note:'cash|mpesa|bank_transfer|petty_cash'},
+      {n:'approvalStatus',t:'select',key:true,note:'pending|approved|rejected'},
+      {n:'approvedByUserId',t:'link'},{n:'rejectionReason',t:'text'},
+     ],issues:[]},
+    {name:'RentAccount',id:'tbltZFYqL2w7qe7ry',purpose:'Rent payments per branch. n8n alerts every Monday if leaseEndDate within 60 days.',
+     fields:[
+      {n:'rentEntryId',t:'num'},{n:'businessUnitId',t:'link'},
+      {n:'landlordName',t:'text'},{n:'leaseStartDate',t:'date'},{n:'leaseEndDate',t:'date',key:true},
+      {n:'monthlyRentAmount',t:'currency'},{n:'annualRentAmount',t:'formula',note:'monthlyRentAmount * 12'},
+      {n:'amountPaid',t:'currency'},{n:'arrearsAmount',t:'currency'},
+      {n:'paymentStatus',t:'select',key:true,note:'paid|late|partial|missed'},
+      {n:'leaseRenewalStatus',t:'select',note:'active|renewal_pending|expired|terminated'},
+     ],issues:[]},
+    {name:'DeliveryAccount',id:'tblMGlFjMMFBPbR1a',purpose:'Freight cost per purchase order. Tracks logistics cost per delivery.',
+     fields:[
+      {n:'deliveryEntryId',t:'num'},{n:'purchaseOrderId',t:'link'},{n:'businessUnitId',t:'link'},
+      {n:'freightAmount',t:'currency',key:true},
+      {n:'freightBasis',t:'select',note:'per_km|flat_rate|per_kg|percentage_of_order'},
+      {n:'freightAsPercentOfOrder',t:'formula',note:'freightAmount/orderValueDelivered*100'},
+      {n:'paymentStatus',t:'select',note:'pending|paid|included_in_invoice'},
+     ],issues:[]},
+    {name:'SalesAccount',id:'tblDUFQUH3Vu3vA5x',purpose:'Daily financial summary per branch. n8n rolls up from SalesTransaction every night at 23:30.',
+     fields:[
+      {n:'salesAccountEntryId',t:'num'},{n:'businessUnitId',t:'link'},{n:'entryDate',t:'date'},
+      {n:'grossRevenue',t:'currency',key:true},{n:'netRevenue',t:'formula',note:'grossRevenue - totalDiscountsGiven'},
+      {n:'totalCostOfGoodsSold',t:'currency'},
+      {n:'grossProfit',t:'formula',key:true,note:'netRevenue - totalCostOfGoodsSold'},
+      {n:'grossProfitMarginPercent',t:'formula'},{n:'salesTargetAmount',t:'currency'},
+      {n:'targetAchievementPercent',t:'formula',key:true,note:'netRevenue/salesTargetAmount*100'},
+      {n:'totalMpesaCollected',t:'currency'},{n:'totalCashCollected',t:'currency'},
+      {n:'totalCreditSales',t:'currency'},{n:'isWeekday',t:'check'},
+     ],issues:[]},
+    {name:'AssetAccount',id:'tbl7zrNC8bL5VQQFh',purpose:'Inventory capital value. Every purchase increases it, every sale decreases it by FIFO cost. Written by n8n.',
+     fields:[
+      {n:'assetEntryId',t:'num'},{n:'businessUnitId',t:'link'},{n:'productId',t:'link'},
+      {n:'movementType',t:'select',note:'purchase_in|sale_out|adjustment|opening_balance|write_off|transfer_in|transfer_out'},
+      {n:'quantityMoved',t:'num'},{n:'unitCost',t:'currency'},
+      {n:'totalMovementValue',t:'formula',note:'quantityMoved * unitCost'},
+      {n:'assetValueBefore',t:'currency'},{n:'assetValueAfter',t:'currency',key:true},
+     ],issues:[]},
+    {name:'AllowanceAccount',id:'tbllsfTxMZL238kdA',purpose:'Housing, transport, medical, per diem, overtime allowances. Feeds into SalaryAccount.allowancesTotal.',
+     fields:[
+      {n:'allowanceEntryId',t:'num'},{n:'employeeId',t:'link'},
+      {n:'allowanceType',t:'select',note:'housing|transport|medical|per_diem|airtime|meal|overtime|other'},
+      {n:'allowanceAmount',t:'currency',key:true},{n:'isTaxable',t:'check'},
+      {n:'paymentStatus',t:'select',note:'pending|included_in_payroll|paid_separately'},
+      {n:'approvedByUserId',t:'link'},
+     ],issues:[]},
+    {name:'ChartOfAccounts',id:'tbllFYfx1FkytBXPc',purpose:'Account codes for double-entry accounting. Pre-seeded with 15 accounts. Every financial event maps here.',
+     fields:[
+      {n:'accountCode',t:'text',key:true,note:'Primary — e.g. 4001'},
+      {n:'accountName',t:'text',note:'e.g. Sales Revenue'},
+      {n:'accountType',t:'select',note:'asset|liability|equity|revenue|expense'},
+      {n:'normalBalance',t:'select',note:'debit|credit'},
+      {n:'isActive',t:'check'},
+      {n:'FinanceJournalEntry (debit)',t:'link'},{n:'FinanceJournalEntry (credit)',t:'link'},
+     ],issues:[]},
+    {name:'FinanceJournalEntry',id:'tblphIXArG6IeOV2M',purpose:'Double-entry ledger. Every financial event produces one row. If debit≠credit → immediate alert to management.',
+     fields:[
+      {n:'journalEntryId',t:'num'},{n:'journalEntryNumber',t:'text',note:'JE-YYYY-XXXXXX'},
+      {n:'entryDate',t:'date'},{n:'sourceType',t:'text',note:'SalesAccount|SalaryAccount|ExpenseAccount|...'},
+      {n:'businessUnitId',t:'link'},
+      {n:'debitAccountCode',t:'link',key:true,note:'→ ChartOfAccounts'},
+      {n:'creditAccountCode',t:'link',key:true,note:'→ ChartOfAccounts'},
+      {n:'entryAmount',t:'currency',key:true},
+      {n:'isReversed',t:'check'},{n:'isSystemGenerated',t:'check',note:'n8n writes this'},
+     ],issues:[]},
+  ]},
+  {name:'Management',color:'#2C2C2A',tables:[
+    {name:'SystemAuditLog',id:'tbl7GiFNtKhDTL4ZN',purpose:'Every INSERT, UPDATE, DELETE, APPROVE, REJECT, LOGIN, LOGOUT, EXPORT. Immutable. Never delete rows.',
+     fields:[
+      {n:'auditId',t:'num'},{n:'userId',t:'link'},{n:'businessUnitId',t:'link'},
+      {n:'actionType',t:'select',key:true,note:'INSERT|UPDATE|DELETE|APPROVE|REJECT|LOGIN|LOGOUT|EXPORT'},
+      {n:'tableName',t:'text',key:true},{n:'recordId',t:'num'},
+      {n:'oldValues',t:'text',note:'JSON'},{n:'newValues',t:'text',note:'JSON'},
+      {n:'changedColumns',t:'text'},{n:'ipAddress',t:'text'},{n:'actionTimestamp',t:'datetime'},
+     ],issues:[]},
+    {name:'NotificationLog',id:'tbltpPtEc87dkOgl7',purpose:'Every SMS, email, WhatsApp ever sent. n8n retries failed messages daily (retryCount < 3).',
+     fields:[
+      {n:'notificationId',t:'num'},
+      {n:'recipientType',t:'select',note:'employee|customer|manager|system'},
+      {n:'recipientPhoneNumber',t:'phone'},{n:'recipientEmail',t:'email'},
+      {n:'notificationChannel',t:'select',note:'sms|email|whatsapp|in_app'},
+      {n:'notificationType',t:'text',note:'otp_login|payslip|loan_statement|debtor_reminder|price_change_alert|low_stock_alert|missing_sales_day|...'},
+      {n:'notificationBody',t:'text'},{n:'deliveryStatus',t:'select',key:true,note:'pending|sent|delivered|failed|bounced'},
+      {n:'retryCount',t:'num',note:'n8n retries up to 3'},
+      {n:'n8nWorkflowRunId',t:'text',note:'Which workflow sent this'},
+      {n:'notificationSummary',t:'ai',note:'AI-generated summary — new field in schema'},
+      {n:'deliveryTimeSeconds',t:'num',note:'New field in schema'},
+     ],issues:[{type:'info',msg:'2 extra fields found in real schema not in spec: deliveryTimeSeconds (number) and notificationSummary (aiText) — these are valid additions'}]},
+    {name:'Table 1',id:'(default table)',purpose:'⚠ DEFAULT AIRTABLE TABLE — should be deleted. This table contains no ERP data and pollutes the schema.',
+     fields:[
+      {n:'Name',t:'text',note:'Default field'},{n:'Notes',t:'text'},{n:'Assignee',t:'text'},
+      {n:'Status',t:'select',note:'Todo|In progress|Done'},
+      {n:'Attachments',t:'check'},{n:'Attachment Summary',t:'ai'},
+     ],issues:[{type:'error',msg:'DELETE this table immediately — it is the default Airtable table and should not exist in a production database'}]},
+  ]},
+];
+
+const typeMap={
+  num:'NUM',text:'TEXT',currency:'KES',date:'DATE',datetime:'DATE+T',select:'SELECT',
+  formula:'FX',auto:'AUTO',link:'→ LINK',check:'CHECK',phone:'PHONE',email:'EMAIL',
+  percent:'%',ai:'AI',url:'URL'
+};
+const typeCls={
+  num:'ft-num',text:'ft-text',currency:'ft-currency',date:'ft-date',datetime:'ft-date',
+  select:'ft-select',formula:'ft-formula',auto:'ft-auto',link:'ft-link',
+  check:'ft-check',phone:'ft-ph',email:'ft-ph',percent:'ft-formula',ai:'ft-formula',url:'ft-text'
+};
+const issueIcon={error:'🔴',warn:'🟡',info:'🟢'};
+
+let allTables=[];DOMAINS.forEach(d=>d.tables.forEach(t=>{t.domain=d.name;t.color=d.color;allTables.push(t);}));
+let currentDomain='all';
+
+function buildTabs(){
+  const c=document.getElementById('dtabs');
+  const all=[{name:'all',label:'All 44'},...DOMAINS.map(d=>({name:d.name,label:d.name+' ('+d.tables.length+')'}))];
+  all.forEach(d=>{
+    const el=document.createElement('div');
+    el.className='dtab'+(d.name==='all'?' on':'');
+    el.textContent=d.label;
+    el.onclick=()=>filterDomain(d.name,el);
+    c.appendChild(el);
+  });
+}
+
+function filterDomain(name,el){
+  currentDomain=name;
+  document.querySelectorAll('.dtab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  buildList();
+  document.getElementById('detail').innerHTML='<div class="d-empty"><div class="arrow">←</div><div>Select a table to view its complete schema</div></div>';
+}
+
+function buildList(){
+  const c=document.getElementById('tlist');c.innerHTML='';
+  const tabs=currentDomain==='all'?allTables:allTables.filter(t=>t.domain===currentDomain);
+  let lastDomain='';
+  tabs.forEach(t=>{
+    if(currentDomain==='all' && t.domain!==lastDomain){
+      const lbl=document.createElement('div');
+      lbl.className='section-lbl';
+      lbl.textContent=t.domain;
+      c.appendChild(lbl);
+      lastDomain=t.domain;
+    }
+    const row=document.createElement('div');
+    row.className='trow';
+    row.id='tr-'+t.name.replace(/\s/g,'_');
+    const hasIssue=t.issues&&t.issues.length>0;
+    row.innerHTML=`<div class="trow-dot" style="background:${t.color}"></div><div class="trow-name">${t.name}</div><div class="trow-fc">${t.fields.length}f</div>${hasIssue?'<span class="trow-issue">'+issueIcon[t.issues[0].type]+'</span>':''}`;
+    row.onclick=()=>showDetail(t);
+    c.appendChild(row);
+  });
+}
+
+function selTable(name){
+  const t=allTables.find(x=>x.name===name);
+  if(t){filterDomain('all',document.querySelector('.dtab'));showDetail(t);}
+}
+
+function showDetail(t){
+  document.querySelectorAll('.trow').forEach(r=>r.classList.remove('sel'));
+  const tr=document.getElementById('tr-'+t.name.replace(/\s/g,'_'));
+  if(tr){tr.classList.add('sel');tr.scrollIntoView({block:'nearest'});}
+  const d=document.getElementById('detail');
+  const issueHTML=t.issues&&t.issues.length?`<div class="d-issues">${t.issues.map(i=>`<div class="d-issue-row">${issueIcon[i.type]} ${i.msg}</div>`).join('')}</div>`:'';
+  const rows=t.fields.map(f=>`<tr><td><b>${f.n}</b>${f.key?'<span class="key-badge">KEY</span>':''}</td><td><span class="ft-type ${typeCls[f.t]||'ft-text'}">${typeMap[f.t]||f.t}</span></td><td class="note-cell">${f.note||''}</td></tr>`).join('');
+  d.innerHTML=`
+    <div class="d-hdr">
+      <div class="d-name" style="color:${t.color}">${t.name}</div>
+      <div class="d-id">Table ID: <b>${t.id}</b> &nbsp;·&nbsp; Base: <b>appBi5gDt0xGCNQGJ</b></div>
+      <div class="d-meta">
+        <span class="d-meta-chip">📋 ${t.fields.length} fields shown</span>
+        <span class="d-meta-chip">🏷 ${t.domain}</span>
+        ${t.issues&&t.issues.length?`<span class="d-meta-chip" style="background:#FCEBEB;color:#791F1F">⚠ ${t.issues.length} issue${t.issues.length>1?'s':''}</span>`:''}
+      </div>
+    </div>
+    <div class="d-purpose">${t.purpose}</div>
+    ${issueHTML}
+    <div class="fields-hdr">Fields</div>
+    <table class="ft"><tr><th>Field Name</th><th>Type</th><th>Notes / Values</th></tr>${rows}</table>
+    <div style="margin-top:8px;padding:6px 8px;background:var(--color-background-secondary);border-radius:5px;font-size:8.5px;color:var(--color-text-secondary)">
+      API endpoint: <span style="font-family:monospace;color:var(--bo)">GET https://api.airtable.com/v0/appBi5gDt0xGCNQGJ/${t.name}</span>
+    </div>`;
+}
+
+buildTabs();buildList();
+</script>

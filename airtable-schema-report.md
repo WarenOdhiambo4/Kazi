@@ -1,16 +1,6 @@
-# Airtable Schema Report
 
-Generated from Airtable Metadata API for base `appBi5gDt0xGCNQGJ`.
 
 ## Tables, Columns, and Relations
-
-TABLE: Table 1
-  - Name: singleLineText
-  - Notes: multilineText
-  - Assignee: singleCollaborator
-  - Status: singleSelect (choices=Todo,In progress,Done)
-  - Attachments: multipleAttachments
-  - Attachment Summary: aiText
 
 TABLE: Company
   - companyId: autoNumber
