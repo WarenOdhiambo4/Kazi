@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import dns from 'node:dns';
+import https from 'node:https';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -14,6 +15,10 @@ const app = express();
 const port = process.env.PORT || '3001';
 const airtableKey = process.env.AIRTABLE_API_KEY;
 const airtableBaseId = process.env.AIRTABLE_BASE_ID;
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? '';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? '';
+const backendBaseUrl = process.env.BACKEND_BASE_URL?.trim() || `http://localhost:${port}`;
+const frontendBaseUrl = process.env.FRONTEND_BASE_URL?.trim() || 'http://localhost:5173';
 
 if (!airtableKey || !airtableBaseId) {
   throw new Error('AIRTABLE_API_KEY and AIRTABLE_BASE_ID are required in server environment.');
@@ -48,31 +53,71 @@ app.post('/diagnostics/client-error', (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/diagnostics/client-event', (req, res) => {
-  const { type, detail, url, userAgent, at } = req.body ?? {};
-
-  // eslint-disable-next-line no-console
-  console.log('\n[FRONTEND EVENT]', {
-    type,
-    detail,
-    url,
-    at,
-    userAgent,
-  });
-
-  return res.json({ ok: true });
-});
-
 const AIRTABLE_API_URL = `https://api.airtable.com/v0/${airtableBaseId}`;
+const AIRTABLE_TIMEOUT_MS = 10_000;
+const airtableAgent = new https.Agent({ family: 4, keepAlive: true, timeout: AIRTABLE_TIMEOUT_MS });
 const authHeaders = () => ({ Authorization: `Bearer ${airtableKey}`, 'Content-Type': 'application/json' });
 const TABLES = {
   SYSTEM_USER: 'SystemUser',
+  BUSINESS_UNIT: 'BusinessUnit',
   USER_ROLE: 'UserRole',
+  ROLE_PERMISSION: 'RolePermission',
   USER_SESSION: 'UserSession',
   LOGIN_AUDIT_LOG: 'LoginAuditLog',
 } as const;
 
 const escapeFormulaValue = (value: string) => value.replace(/'/g, "\\'");
+
+const formatNetworkError = (error: unknown) => {
+  if (!(error instanceof Error)) return String(error);
+
+  const cause = (error as Error & { cause?: any }).cause;
+  const nestedErrors = Array.isArray(cause?.errors)
+    ? cause.errors
+        .map((item: any) => [item.code, item.address, item.port].filter(Boolean).join(' '))
+        .filter(Boolean)
+    : [];
+
+  return nestedErrors.length > 0 ? `${error.message}: ${nestedErrors.join('; ')}` : error.message;
+};
+
+const airtableRequest = (
+  pathOrUrl: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string } = {},
+) =>
+  new Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }>((resolve, reject) => {
+    const url = new URL(pathOrUrl.startsWith('http') ? pathOrUrl : `${AIRTABLE_API_URL}${pathOrUrl}`);
+    const req = https.request(
+      url,
+      {
+        method: options.method ?? 'GET',
+        headers: options.headers ?? authHeaders(),
+        family: 4,
+        agent: airtableAgent,
+        timeout: AIRTABLE_TIMEOUT_MS,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        response.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf8');
+          resolve({
+            ok: Number(response.statusCode) >= 200 && Number(response.statusCode) < 300,
+            status: Number(response.statusCode ?? 0),
+            text: async () => body,
+            json: async () => JSON.parse(body),
+          });
+        });
+      },
+    );
+
+    req.on('timeout', () => {
+      req.destroy(new Error(`Airtable request timed out after ${AIRTABLE_TIMEOUT_MS}ms`));
+    });
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
 
 const decodeOAuthState = (state?: string) => {
   if (!state) return { mode: 'login' };
@@ -84,9 +129,7 @@ const decodeOAuthState = (state?: string) => {
 };
 
 const getAirtableFieldsWithDefaults = async (tableName: string, customFields: Record<string, any>) => {
-  const sampleResp = await fetch(`${AIRTABLE_API_URL}/${tableName}?maxRecords=1`, {
-    headers: authHeaders(),
-  });
+  const sampleResp = await airtableRequest(`/${tableName}?maxRecords=1`);
 
   let fieldNames: string[] = [];
   if (sampleResp.ok) {
@@ -104,15 +147,15 @@ const getAirtableFieldsWithDefaults = async (tableName: string, customFields: Re
 };
 
 const findAirtableRecordByFilter = async (tableName: string, formula: string) => {
-  const url = `${AIRTABLE_API_URL}/${tableName}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
-  const response = await fetch(url, { headers: authHeaders() });
+  const url = `/${tableName}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
+  const response = await airtableRequest(url);
   if (!response.ok) return null;
   const result = await response.json();
   return Array.isArray(result.records) && result.records.length > 0 ? result.records[0] : null;
 };
 
 const getAirtableRecordById = async (tableName: string, recordId: string) => {
-  const response = await fetch(`${AIRTABLE_API_URL}/${tableName}/${recordId}`, { headers: authHeaders() });
+  const response = await airtableRequest(`/${tableName}/${recordId}`);
   if (!response.ok) return null;
   return response.json();
 };
@@ -143,7 +186,7 @@ const buildClientSession = async (userRecord: any, sessionId: string, loginAt = 
 };
 
 const updateAirtableRecord = async (tableName: string, recordId: string, fields: Record<string, any>) => {
-  const response = await fetch(`${AIRTABLE_API_URL}/${tableName}/${recordId}`, {
+  const response = await airtableRequest(`/${tableName}/${recordId}`, {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify({ fields }),
@@ -156,7 +199,7 @@ const updateAirtableRecord = async (tableName: string, recordId: string, fields:
 };
 
 const createAirtableRecord = async (tableName: string, fields: Record<string, any>) => {
-  const response = await fetch(`${AIRTABLE_API_URL}/${tableName}`, {
+  const response = await airtableRequest(`/${tableName}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ fields }),
@@ -168,39 +211,57 @@ const createAirtableRecord = async (tableName: string, fields: Record<string, an
   return response.json();
 };
 
+const listAirtableRecords = async (tableName: string, maxRecords = 100) => {
+  const response = await airtableRequest(`/${tableName}?pageSize=${Math.min(maxRecords, 100)}&maxRecords=${maxRecords}`);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Airtable list failed: ${response.status} ${body}`);
+  }
+  const result = await response.json();
+  return Array.isArray(result.records) ? result.records : [];
+};
+
 const readAirtableSample = async (tableName: string, maxRecords = 3) => {
   const startedAt = Date.now();
-  const response = await fetch(`${AIRTABLE_API_URL}/${tableName}?pageSize=${maxRecords}&maxRecords=${maxRecords}`, {
-    headers: authHeaders(),
-  });
-  const durationMs = Date.now() - startedAt;
-  const body = await response.text();
+  try {
+    const response = await airtableRequest(`/${tableName}?pageSize=${maxRecords}&maxRecords=${maxRecords}`);
+    const durationMs = Date.now() - startedAt;
+    const body = await response.text();
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return {
+        ok: false,
+        tableName,
+        status: response.status,
+        durationMs,
+        error: body,
+      };
+    }
+
+    const parsed = JSON.parse(body);
+    const records = Array.isArray(parsed.records) ? parsed.records : [];
+    const fieldNames = Array.from(
+      new Set(records.flatMap((record: any) => Object.keys(record?.fields ?? {}))),
+    ).sort();
+
     return {
-      ok: false,
+      ok: true,
       tableName,
       status: response.status,
       durationMs,
-      error: body,
+      count: records.length,
+      fieldNames,
+      sampleIds: records.map((record: any) => record.id),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      tableName,
+      status: 0,
+      durationMs: Date.now() - startedAt,
+      error: formatNetworkError(error),
     };
   }
-
-  const parsed = JSON.parse(body);
-  const records = Array.isArray(parsed.records) ? parsed.records : [];
-  const fieldNames = Array.from(
-    new Set(records.flatMap((record: any) => Object.keys(record?.fields ?? {}))),
-  ).sort();
-
-  return {
-    ok: true,
-    tableName,
-    status: response.status,
-    durationMs,
-    count: records.length,
-    fieldNames,
-    sampleIds: records.map((record: any) => record.id),
-  };
 };
 
 const createLoginAuditLog = async (fields: Record<string, any>) => {
@@ -217,6 +278,91 @@ const createLoginAuditLog = async (fields: Record<string, any>) => {
     // eslint-disable-next-line no-console
     console.error('Login audit log failed:', error);
   }
+};
+
+const defaultResourcesByRole: Record<string, string[]> = {
+  SystemAdministrator: [
+    'dashboard',
+    'sales',
+    'procurement',
+    'inventory',
+    'debtors',
+    'customers',
+    'suppliers',
+    'hr',
+    'finance',
+    'payroll',
+    'accounts',
+    'reports',
+    'audit',
+    'settings',
+  ],
+  RegionalManager: [
+    'dashboard',
+    'sales',
+    'procurement',
+    'inventory',
+    'debtors',
+    'customers',
+    'suppliers',
+    'hr',
+    'finance',
+    'payroll',
+    'accounts',
+    'reports',
+    'audit',
+    'settings',
+  ],
+  BusinessUnitManager: ['dashboard', 'sales', 'procurement', 'inventory', 'debtors', 'customers', 'suppliers', 'finance', 'reports'],
+  HROfficer: ['dashboard', 'hr', 'payroll', 'reports'],
+  FinanceOfficer: ['dashboard', 'finance', 'payroll', 'accounts', 'debtors', 'reports'],
+  SalesCashier: ['dashboard', 'sales', 'customers', 'debtors', 'reports'],
+  InventoryOfficer: ['dashboard', 'procurement', 'inventory', 'suppliers', 'reports'],
+  ReadOnlyAuditor: ['dashboard', 'reports', 'audit'],
+};
+
+const defaultPermissionsForRole = (roleName: string, resourceName: string) => {
+  const readOnly = roleName === 'ReadOnlyAuditor';
+  const audit = resourceName === 'audit';
+  return {
+    canRead: true,
+    canCreate: !readOnly && !audit,
+    canUpdate: !readOnly && !audit,
+    canDelete: roleName === 'SystemAdministrator' && !audit,
+    canApprove: ['SystemAdministrator', 'RegionalManager', 'BusinessUnitManager', 'FinanceOfficer'].includes(roleName) && !audit,
+    canExport: true,
+  };
+};
+
+const ensureRolePermissions = async (roleId: string) => {
+  const roleRecord = await getAirtableRecordById(TABLES.USER_ROLE, roleId);
+  const roleName = String(roleRecord?.fields?.roleName || '');
+  if (!roleName) return;
+
+  const resources = defaultResourcesByRole[roleName] ?? ['dashboard'];
+  const existingPermissions = await listAirtableRecords(TABLES.ROLE_PERMISSION, 100);
+  const existingKeys = new Set(
+    existingPermissions
+      .filter((record: any) => Array.isArray(record.fields?.roleId) && record.fields.roleId.includes(roleId))
+      .map((record: any) => String(record.fields?.resourceName || '')),
+  );
+
+  await Promise.all(
+    resources
+      .filter((resourceName) => !existingKeys.has(resourceName))
+      .map((resourceName) =>
+        createAirtableRecord(TABLES.ROLE_PERMISSION, {
+          roleId: [roleId],
+          resourceName,
+          ...defaultPermissionsForRole(roleName, resourceName),
+        }),
+      ),
+  );
+};
+
+const redirectToLogin = (params: Record<string, string>) => {
+  const search = new URLSearchParams(params);
+  return `${frontendBaseUrl}/login?${search.toString()}`;
 };
 
 app.post('/settings/system-users', async (req, res) => {
@@ -239,6 +385,7 @@ app.post('/settings/system-users', async (req, res) => {
     }
 
     const now = new Date().toISOString();
+    await ensureRolePermissions(userRoleId);
     const created = await createAirtableRecord(TABLES.SYSTEM_USER, {
       firstName,
       lastName,
@@ -266,6 +413,61 @@ app.post('/settings/system-users', async (req, res) => {
   }
 });
 
+app.post('/settings/business-units', async (req, res) => {
+  try {
+    const {
+      businessUnitName,
+      businessUnitCode,
+      businessUnitType,
+      businessUnitPhysicalAddress,
+      businessUnitCity,
+      businessUnitRegion,
+      businessUnitPhoneNumber,
+      businessUnitEmail,
+      businessUnitOpeningDate,
+      businessUnitMonthlyRentAmount,
+      businessUnitSquareMeterage,
+      businessUnitStatus,
+    } = req.body as Record<string, any>;
+
+    if (
+      !businessUnitName ||
+      !businessUnitCode ||
+      !businessUnitType ||
+      !businessUnitPhysicalAddress ||
+      !businessUnitCity ||
+      !businessUnitRegion ||
+      !businessUnitPhoneNumber ||
+      !businessUnitEmail ||
+      !businessUnitOpeningDate
+    ) {
+      return res.status(400).json({ error: 'Missing required BusinessUnit fields' });
+    }
+
+    const created = await createAirtableRecord(TABLES.BUSINESS_UNIT, {
+      businessUnitName,
+      businessUnitCode,
+      businessUnitType,
+      businessUnitPhysicalAddress,
+      businessUnitCity,
+      businessUnitRegion,
+      businessUnitPhoneNumber,
+      businessUnitEmail,
+      businessUnitOpeningDate,
+      businessUnitMonthlyRentAmount: Number(businessUnitMonthlyRentAmount ?? 0),
+      businessUnitSquareMeterage: Number(businessUnitSquareMeterage ?? 0),
+      businessUnitStatus: businessUnitStatus || 'active',
+    });
+
+    return res.status(201).json({ recordId: created.id });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'BusinessUnit create failed',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 app.post('/auth/login', async (req, res) => {
   return res.status(410).json({
     error: 'Password login is disabled',
@@ -280,22 +482,21 @@ app.use(
     changeOrigin: true,
     timeout: 10_000,
     proxyTimeout: 10_000,
+    agent: airtableAgent,
     pathRewrite: { '^/api': '' },
     onProxyReq(proxyReq, req) {
+      const requestUrl = (req as any).originalUrl || req.url || '';
       // eslint-disable-next-line no-console
-      console.log(`[AIRTABLE PROXY] ${req.method} ${req.url}`);
+      console.log(`[AIRTABLE PROXY] ${req.method} ${requestUrl}`);
       proxyReq.setHeader('Authorization', `Bearer ${airtableKey}`);
       proxyReq.setHeader('Content-Type', 'application/json');
     },
     onError(err, req, res) {
-      const details = err instanceof Error
-        ? err.message
-        : err && typeof err === 'object'
-          ? JSON.stringify(err)
-          : String(err);
+      const requestUrl = (req as any).originalUrl || req.url || '';
+      const details = formatNetworkError(err);
 
       // eslint-disable-next-line no-console
-      console.error(`[AIRTABLE PROXY ERROR] ${req.method} ${req.url} - ${details}`);
+      console.error(`[AIRTABLE PROXY ERROR] ${req.method} ${requestUrl} - ${details}`);
 
       res.status(500).json({ error: 'Airtable proxy error', details });
     },
@@ -306,24 +507,39 @@ app.get('/', (_req, res) => res.json({ status: 'proxy-running', message: 'Use /a
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.get('/meta/access-check', async (_req, res) => {
-  const checks = await Promise.all([
-    readAirtableSample('UserRole'),
-    readAirtableSample('RolePermission'),
-    readAirtableSample('BusinessUnit'),
-  ]);
+app.get('/meta/oauth-check', (_req, res) => res.json({
+  googleClientIdConfigured: Boolean(googleClientId),
+  googleClientSecretConfigured: Boolean(googleClientSecret),
+  redirectUri: `${backendBaseUrl}/auth/google/callback`,
+  frontendBaseUrl,
+}));
 
-  return res.status(checks.every((check) => check.ok) ? 200 : 502).json({
-    ok: checks.every((check) => check.ok),
-    baseId: airtableBaseId,
-    checks,
-  });
+app.get('/meta/access-check', async (_req, res) => {
+  try {
+    const checks = await Promise.all([
+      readAirtableSample('UserRole'),
+      readAirtableSample('RolePermission'),
+      readAirtableSample('BusinessUnit'),
+    ]);
+
+    return res.status(checks.every((check) => check.ok) ? 200 : 502).json({
+      ok: checks.every((check) => check.ok),
+      baseId: airtableBaseId,
+      checks,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: 'Access check failed',
+      details: formatNetworkError(error),
+    });
+  }
 });
 
 app.get('/meta/schema', async (_req, res) => {
   try {
     const metadataUrl = `https://api.airtable.com/v0/meta/bases/${airtableBaseId}/tables`;
-    const response = await fetch(metadataUrl, {
+    const response = await airtableRequest(metadataUrl, {
       headers: {
         Authorization: `Bearer ${airtableKey}`,
         'Content-Type': 'application/json',
@@ -350,15 +566,13 @@ app.get('/meta/schema', async (_req, res) => {
 
 // --- OAuth: Google start and callback with session issuance ---
 app.get('/auth/google', (req, res) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
   const mode = String(req.query.mode || 'login');
-  const redirectBase = process.env.BACKEND_BASE_URL || `http://localhost:${port}`;
-  const redirectUri = `${redirectBase}/auth/google/callback`;
-  if (!clientId) return res.status(500).json({ error: 'GOOGLE_CLIENT_ID not configured' });
+  const redirectUri = `${backendBaseUrl}/auth/google/callback`;
+  if (!googleClientId) return res.status(500).json({ error: 'GOOGLE_CLIENT_ID not configured' });
 
   const state = encodeURIComponent(JSON.stringify({ ts: Date.now(), rnd: Math.random().toString(36).slice(2), mode }));
   const scope = encodeURIComponent('openid email profile');
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${googleClientId}&redirect_uri=${encodeURIComponent(
     redirectUri,
   )}&scope=${scope}&access_type=offline&prompt=select_account&state=${state}`;
 
@@ -372,20 +586,25 @@ app.get('/auth/google/callback', async (req, res) => {
     const state = decodeOAuthState(rawState);
     if (!code) return res.status(400).json({ error: 'Missing code' });
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectBase = process.env.BACKEND_BASE_URL || `http://localhost:${port}`;
-    const redirectUri = `${redirectBase}/auth/google/callback`;
+    const redirectUri = `${backendBaseUrl}/auth/google/callback`;
 
-    if (!clientId || !clientSecret) return res.status(500).json({ error: 'Google OAuth not configured' });
+    if (!googleClientId || !googleClientSecret) {
+      return res.status(500).json({
+        error: 'Google OAuth not configured',
+        missing: {
+          GOOGLE_CLIENT_ID: !googleClientId,
+          GOOGLE_CLIENT_SECRET: !googleClientSecret,
+        },
+      });
+    }
 
     const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: clientId,
-        client_secret: clientSecret,
+        client_id: googleClientId,
+        client_secret: googleClientSecret,
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
@@ -411,16 +630,36 @@ app.get('/auth/google/callback', async (req, res) => {
     const profile = await userInfoResp.json();
     const email = profile.email as string | undefined;
 
-    if (!email) return res.status(400).json({ error: 'Google profile missing email' });
+    if (!email) return res.redirect(redirectToLogin({ authError: '1' }));
 
     const existingUser = await findAirtableRecordByFilter(TABLES.SYSTEM_USER, `({emailAddress}='${escapeFormulaValue(email)}')`);
     const userRecord = existingUser;
     if (!userRecord) {
-      return res.status(403).json({ error: 'Google email is not registered in SystemUser' });
+      await createLoginAuditLog({
+        attemptedEmailOrPhone: email,
+        attemptResult: 'not_found',
+        attemptedAt: new Date().toISOString(),
+        userAgent: req.get('user-agent') ?? '',
+        ipAddress: req.ip,
+      });
+      return res.redirect(redirectToLogin({ authError: '1' }));
     }
 
     if (userRecord.fields?.accountStatus === 'locked') {
-      return res.status(403).json({ error: 'Account locked' });
+      await createLoginAuditLog({
+        userId: userRecord.id,
+        attemptedEmailOrPhone: email,
+        attemptResult: 'account_locked',
+        attemptedAt: new Date().toISOString(),
+        userAgent: req.get('user-agent') ?? '',
+        ipAddress: req.ip,
+      });
+      return res.redirect(redirectToLogin({ authError: '1' }));
+    }
+
+    const linkedRoleId = firstLinkedId(userRecord.fields?.userRoleId);
+    if (linkedRoleId) {
+      await ensureRolePermissions(linkedRoleId);
     }
 
     const sessionId = crypto.randomUUID();
@@ -433,9 +672,21 @@ app.get('/auth/google/callback', async (req, res) => {
       loginAt,
       lastActiveAt: loginAt,
     });
+    await updateAirtableRecord(TABLES.SYSTEM_USER, userRecord.id, {
+      lastSuccessfulLoginAt: loginAt,
+      lastActivityAt: loginAt,
+      failedLoginCount: 0,
+    });
+    await createLoginAuditLog({
+      userId: userRecord.id,
+      attemptedEmailOrPhone: email,
+      attemptResult: 'success',
+      attemptedAt: loginAt,
+      userAgent: req.get('user-agent') ?? '',
+      ipAddress: req.ip,
+    });
 
-    const frontendBase = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
-    const redirectTo = `${frontendBase}/login?sessionId=${encodeURIComponent(sessionId)}&authSuccess=1`;
+    const redirectTo = `${frontendBaseUrl}/login?sessionId=${encodeURIComponent(sessionId)}&authSuccess=1`;
     return res.redirect(redirectTo);
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -509,12 +760,8 @@ app.post('/auth/register-admin', async (req, res) => {
     if (code !== expected) return res.status(403).json({ error: 'Invalid registration code' });
 
     // create admin user in SystemUser table
-    const usersUrl = `https://api.airtable.com/v0/${airtableBaseId}/${TABLES.SYSTEM_USER}`;
-
     // Fetch an existing record to discover field names so we can avoid nulls
-    const sampleResp = await fetch(`${usersUrl}?maxRecords=1`, {
-      headers: { Authorization: `Bearer ${airtableKey}`, 'Content-Type': 'application/json' },
-    });
+    const sampleResp = await airtableRequest(`/${TABLES.SYSTEM_USER}?maxRecords=1`);
     let fieldNames: string[] = [];
     if (sampleResp.ok) {
       const sj = await sampleResp.json();
@@ -532,9 +779,9 @@ app.post('/auth/register-admin', async (req, res) => {
     defaults.role = 'SystemAdministrator';
     defaults.accountStatus = 'active';
 
-    const createResp = await fetch(usersUrl, {
+    const createResp = await airtableRequest(`/${TABLES.SYSTEM_USER}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${airtableKey}`, 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ fields: defaults }),
     });
     if (!createResp.ok) {
