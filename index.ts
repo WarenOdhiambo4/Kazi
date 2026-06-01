@@ -2,9 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import dns from 'node:dns';
 import https from 'node:https';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -26,7 +28,7 @@ if (!airtableKey || !airtableBaseId) {
 
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '8mb' }));
 
 app.post('/diagnostics/client-error', (req, res) => {
   const { type, message, stack, componentStack, url, userAgent, at } = req.body ?? {};
@@ -51,6 +53,32 @@ app.post('/diagnostics/client-error', (req, res) => {
   }
 
   return res.json({ ok: true });
+});
+
+app.post('/uploads/image', async (req, res) => {
+  try {
+    const { dataUrl } = req.body as { dataUrl?: string; fileName?: string };
+    const match = String(dataUrl ?? '').match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+    if (!match) {
+      return res.status(400).json({ error: 'Only PNG, JPEG, WEBP, and GIF data images are supported.' });
+    }
+
+    const mimeType = match[1];
+    const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? 'jpg' : mimeType.split('/')[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    if (buffer.byteLength > 5 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Image is larger than 5MB.' });
+    }
+
+    const uploadDir = path.resolve(process.cwd(), '../frontend/public/uploads');
+    await mkdir(uploadDir, { recursive: true });
+    const fileName = `${randomUUID()}.${extension}`;
+    await writeFile(path.join(uploadDir, fileName), buffer);
+
+    return res.json({ url: `${frontendBaseUrl}/uploads/${fileName}` });
+  } catch (error) {
+    return res.status(500).json({ error: 'Image upload failed', details: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 const AIRTABLE_API_URL = `https://api.airtable.com/v0/${airtableBaseId}`;
@@ -475,33 +503,30 @@ app.post('/auth/login', async (req, res) => {
   });
 });
 
-app.use(
-  '/api',
-  createProxyMiddleware({
-    target: `https://api.airtable.com/v0/${airtableBaseId}`,
-    changeOrigin: true,
-    timeout: 10_000,
-    proxyTimeout: 10_000,
-    agent: airtableAgent,
-    pathRewrite: { '^/api': '' },
-    onProxyReq(proxyReq, req) {
-      const requestUrl = (req as any).originalUrl || req.url || '';
-      // eslint-disable-next-line no-console
-      console.log(`[AIRTABLE PROXY] ${req.method} ${requestUrl}`);
-      proxyReq.setHeader('Authorization', `Bearer ${airtableKey}`);
-      proxyReq.setHeader('Content-Type', 'application/json');
-    },
-    onError(err, req, res) {
-      const requestUrl = (req as any).originalUrl || req.url || '';
-      const details = formatNetworkError(err);
+app.use('/api', async (req, res) => {
+  const requestUrl = req.originalUrl || req.url || '';
+  const airtablePath = req.url.startsWith('/') ? req.url : `/${req.url}`;
 
-      // eslint-disable-next-line no-console
-      console.error(`[AIRTABLE PROXY ERROR] ${req.method} ${requestUrl} - ${details}`);
+  // eslint-disable-next-line no-console
+  console.log(`[AIRTABLE PROXY] ${req.method} ${requestUrl}`);
 
-      res.status(500).json({ error: 'Airtable proxy error', details });
-    },
-  }),
-);
+  try {
+    const response = await airtableRequest(airtablePath, {
+      method: req.method,
+      headers: authHeaders(),
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body ?? {}),
+    });
+    const body = await response.text();
+    return res.status(response.status).type('application/json').send(body);
+  } catch (error) {
+    const details = formatNetworkError(error);
+
+    // eslint-disable-next-line no-console
+    console.error(`[AIRTABLE PROXY ERROR] ${req.method} ${requestUrl} - ${details}`);
+
+    return res.status(502).json({ error: 'Airtable proxy error', details });
+  }
+});
 
 app.get('/', (_req, res) => res.json({ status: 'proxy-running', message: 'Use /api/<table> or /meta/schema' }));
 
