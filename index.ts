@@ -820,7 +820,11 @@ app.post('/auth/register-admin', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Airtable proxy server running on http://localhost:${port}`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Airtable proxy server running on http://localhost:${port}`);
+  });
+}
+
+export default app;
