@@ -7,6 +7,7 @@ import https from 'node:https';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -21,6 +22,12 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? '';
 const backendBaseUrl = process.env.BACKEND_BASE_URL?.trim() || `http://localhost:${port}`;
 const frontendBaseUrl = process.env.FRONTEND_BASE_URL?.trim() || 'http://localhost:5173';
+const uploadDir = process.env.UPLOAD_DIR?.trim() || (
+  process.env.VERCEL === '1'
+    ? path.join(os.tmpdir(), 'paroha-uploads')
+    : path.resolve(process.cwd(), 'public/uploads')
+);
+const uploadBaseUrl = process.env.UPLOAD_BASE_URL?.trim() || backendBaseUrl;
 
 if (!airtableKey || !airtableBaseId) {
   throw new Error('AIRTABLE_API_KEY and AIRTABLE_BASE_ID are required in server environment.');
@@ -28,7 +35,8 @@ if (!airtableKey || !airtableBaseId) {
 
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '8mb' }));
+app.use(express.json({ limit: '3mb' }));
+app.use('/uploads', express.static(uploadDir));
 
 app.post('/diagnostics/client-error', (req, res) => {
   const { type, message, stack, componentStack, url, userAgent, at } = req.body ?? {};
@@ -66,17 +74,18 @@ app.post('/uploads/image', async (req, res) => {
     const mimeType = match[1];
     const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? 'jpg' : mimeType.split('/')[1];
     const buffer = Buffer.from(match[2], 'base64');
-    if (buffer.byteLength > 5 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Image is larger than 5MB.' });
+    if (buffer.byteLength > 2 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Image is larger than 2MB. Compress it or paste an external image URL.' });
     }
 
-    const uploadDir = path.resolve(process.cwd(), '../frontend/public/uploads');
     await mkdir(uploadDir, { recursive: true });
     const fileName = `${randomUUID()}.${extension}`;
     await writeFile(path.join(uploadDir, fileName), buffer);
 
-    return res.json({ url: `${frontendBaseUrl}/uploads/${fileName}` });
+    return res.json({ url: `${uploadBaseUrl}/uploads/${fileName}` });
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('[UPLOAD ERROR]', error);
     return res.status(500).json({ error: 'Image upload failed', details: error instanceof Error ? error.message : String(error) });
   }
 });
