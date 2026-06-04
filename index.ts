@@ -101,6 +101,7 @@ const TABLES = {
   ROLE_PERMISSION: 'RolePermission',
   USER_SESSION: 'UserSession',
   LOGIN_AUDIT_LOG: 'LoginAuditLog',
+  SYSTEM_AUDIT_LOG: 'SystemAuditLog',
 } as const;
 
 const escapeFormulaValue = (value: string) => value.replace(/'/g, "\\'");
@@ -438,6 +439,18 @@ app.post('/settings/system-users', async (req, res) => {
       twoFactorEnabled: Boolean(twoFactorEnabled),
       mustChangePassword: Boolean(mustChangePassword),
     });
+    await createAirtableRecord(TABLES.SYSTEM_AUDIT_LOG, {
+      userId: [created.id],
+      businessUnitId: [businessUnitId],
+      actionType: 'INSERT',
+      tableName: 'SystemUser',
+      recordId: 0,
+      newValues: JSON.stringify(created.fields ?? {}),
+      changedColumns: 'firstName,lastName,emailAddress,phoneNumber,userRoleId,businessUnitId,accountStatus',
+      ipAddress: req.ip,
+      actionDescription: `Created SystemUser ${created.id}`,
+      actionTimestamp: now,
+    });
 
     return res.status(201).json({ recordId: created.id });
   } catch (error) {
@@ -494,6 +507,16 @@ app.post('/settings/business-units', async (req, res) => {
       businessUnitMonthlyRentAmount: Number(businessUnitMonthlyRentAmount ?? 0),
       businessUnitSquareMeterage: Number(businessUnitSquareMeterage ?? 0),
       businessUnitStatus: businessUnitStatus || 'active',
+    });
+    await createAirtableRecord(TABLES.SYSTEM_AUDIT_LOG, {
+      actionType: 'INSERT',
+      tableName: 'BusinessUnit',
+      recordId: 0,
+      newValues: JSON.stringify(created.fields ?? {}),
+      changedColumns: 'businessUnitName,businessUnitCode,businessUnitType,businessUnitPhysicalAddress,businessUnitCity,businessUnitRegion,businessUnitPhoneNumber,businessUnitEmail,businessUnitOpeningDate,businessUnitStatus',
+      ipAddress: req.ip,
+      actionDescription: `Created BusinessUnit ${created.id}`,
+      actionTimestamp: new Date().toISOString(),
     });
 
     return res.status(201).json({ recordId: created.id });
