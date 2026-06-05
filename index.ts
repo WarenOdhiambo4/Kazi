@@ -365,7 +365,7 @@ const defaultPermissionsForRole = (roleName: string, resourceName: string) => {
   return {
     canRead: true,
     canCreate: !readOnly && !audit,
-    canUpdate: !readOnly && !audit,
+    canUpdate: roleName === 'SystemAdministrator' && !audit,
     canDelete: roleName === 'SystemAdministrator' && !audit,
     canApprove: ['SystemAdministrator', 'RegionalManager', 'BusinessUnitManager', 'FinanceOfficer'].includes(roleName) && !audit,
     canExport: true,
@@ -418,19 +418,20 @@ app.post('/settings/system-users', async (req, res) => {
       mustChangePassword,
     } = req.body as Record<string, any>;
 
-    if (!firstName || !lastName || !emailAddress || !phoneNumber || !userRoleId || !businessUnitId) {
+    if (!firstName || !lastName || !emailAddress || !phoneNumber || !userRoleId) {
       return res.status(400).json({ error: 'Missing required SystemUser fields' });
     }
 
     const now = new Date().toISOString();
     await ensureRolePermissions(userRoleId);
+    const normalizedBusinessUnitId = String(businessUnitId ?? '').trim();
     const created = await createAirtableRecord(TABLES.SYSTEM_USER, {
       firstName,
       lastName,
       emailAddress,
       phoneNumber,
       userRoleId: [userRoleId],
-      businessUnitId: [businessUnitId],
+      ...(normalizedBusinessUnitId ? { businessUnitId: [normalizedBusinessUnitId] } : {}),
       accountStatus: accountStatus || 'active',
       failedLoginCount: Number(failedLoginCount ?? 0),
       lastFailedLoginAt: now,
@@ -441,7 +442,7 @@ app.post('/settings/system-users', async (req, res) => {
     });
     await createAirtableRecord(TABLES.SYSTEM_AUDIT_LOG, {
       userId: [created.id],
-      businessUnitId: [businessUnitId],
+      ...(normalizedBusinessUnitId ? { businessUnitId: [normalizedBusinessUnitId] } : {}),
       actionType: 'INSERT',
       tableName: 'SystemUser',
       recordId: 0,
