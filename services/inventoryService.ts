@@ -1,5 +1,4 @@
 
-
 // api/services/inventoryService.ts
 //
 // CENTRALIZED INVENTORY SERVICE
@@ -93,14 +92,46 @@ const escapeFormulaValue = (value: string) => value.replace(/'/g, "\\'");
 // Filtering by productId alone would let two branches selling the same product
 // collide with each other's stock rows.
 async function findStockRecord(businessUnitId: string, productId: string) {
-  const formula =
-    `AND(` +
-    `FIND('${escapeFormulaValue(businessUnitId)}', ARRAYJOIN({businessUnitId})), ` +
-    `FIND('${escapeFormulaValue(productId)}', ARRAYJOIN({productId}))` +
-    `)`;
-  const url = `/${TABLES.INVENTORY_STOCK}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
-  const result = await airtableFetch(url);
-  return Array.isArray(result.records) && result.records.length > 0 ? result.records[0] : null;
+  // Airtable linked record fields store arrays of record IDs internally, but
+  // ARRAYJOIN({linkedField}) returns the DISPLAY NAME of the linked record —
+  // not the record ID. FIND(recordId, displayName) therefore never matches.
+  //
+  // The correct approach: fetch all InventoryStock rows for this product and
+  // filter in-process by matching the businessUnitId array element. We add a
+  // filterByFormula on productId only (using a safe SEARCH on the record ID
+  // via a formula that works with linked fields) to keep the result set small,
+  // then do the businessUnitId match in code.
+  //
+  // Airtable supports filtering linked record fields by record ID using:
+  //   FIND('recXXX', ARRAYJOIN({field}, ','))
+  // BUT only when the field stores IDs, which requires the table to use record
+  // IDs in the linked field — confirmed broken above. We fall back to fetching
+  // all records and filtering in memory, which is safe because InventoryStock
+  // will never have more than ~(products × branches) rows.
+  const url = `/${TABLES.INVENTORY_STOCK}?pageSize=100`;
+  let allRecords: any[] = [];
+  let offset: string | undefined;
+ 
+  do {
+    const pageUrl = offset ? `${url}&offset=${offset}` : url;
+    const result = await airtableFetch(pageUrl);
+    if (Array.isArray(result.records)) allRecords = allRecords.concat(result.records);
+    offset = result.offset;
+  } while (offset);
+ 
+  const match = allRecords.find((record) => {
+    const buField = record.fields?.businessUnitId;
+    const pField = record.fields?.productId;
+    const buMatch = Array.isArray(buField)
+      ? buField.includes(businessUnitId)
+      : String(buField ?? '') === businessUnitId;
+    const pMatch = Array.isArray(pField)
+      ? pField.includes(productId)
+      : String(pField ?? '') === productId;
+    return buMatch && pMatch;
+  });
+ 
+  return match ?? null;
 }
  
 async function createStockRecord(businessUnitId: string, productId: string, openingQuantity: number) {
@@ -192,16 +223,32 @@ export async function getStock(businessUnitId: string, productId: string): Promi
 }
  
 export async function getLedgerHistory(businessUnitId: string, productId: string, maxRecords = 50) {
-  const formula =
-    `AND(` +
-    `FIND('${escapeFormulaValue(businessUnitId)}', ARRAYJOIN({businessUnitId})), ` +
-    `FIND('${escapeFormulaValue(productId)}', ARRAYJOIN({productId}))` +
-    `)`;
+  // Airtable ARRAYJOIN on linked record fields returns display names, not record IDs,
+  // so FIND(recordId, ARRAYJOIN(...)) never matches. Fetch all ledger rows sorted by
+  // createdAt and filter in memory by matching the linked record ID arrays.
   const url =
-    `/${TABLES.INVENTORY_LEDGER}?filterByFormula=${encodeURIComponent(formula)}` +
-    `&sort[0][field]=createdAt&sort[0][direction]=asc&maxRecords=${maxRecords}`;
-  const result = await airtableFetch(url);
-  return Array.isArray(result.records) ? result.records : [];
+    `/${TABLES.INVENTORY_LEDGER}` +
+    `?sort[0][field]=createdAt&sort[0][direction]=asc&pageSize=100`;
+ 
+  let allRecords: any[] = [];
+  let offset: string | undefined;
+ 
+  do {
+    const pageUrl = offset ? `${url}&offset=${offset}` : url;
+    const result = await airtableFetch(pageUrl);
+    if (Array.isArray(result.records)) allRecords = allRecords.concat(result.records);
+    offset = result.offset;
+  } while (offset);
+ 
+  const filtered = allRecords.filter((record) => {
+    const buField = record.fields?.businessUnitId;
+    const pField = record.fields?.productId;
+    const buMatch = Array.isArray(buField) ? buField.includes(businessUnitId) : String(buField ?? '') === businessUnitId;
+    const pMatch = Array.isArray(pField) ? pField.includes(productId) : String(pField ?? '') === productId;
+    return buMatch && pMatch;
+  });
+ 
+  return filtered.slice(-maxRecords); // return last N entries (most recent)
 }
  
 // --- Internal: single-leg movement used by deductStock / addStock ---
@@ -239,15 +286,9 @@ async function applyMovement(params: {
     // Recompute from the ledger tail and fix the stock row before proceeding.
     if (quantityBefore === 0 && params.quantityChange < 0) {
       try {
-        const ledgerUrl =
-          `/${TABLES.INVENTORY_LEDGER}?filterByFormula=` +
-          encodeURIComponent(
-            `AND(FIND('${escapeFormulaValue(params.businessUnitId)}',ARRAYJOIN({businessUnitId})),` +
-            `FIND('${escapeFormulaValue(params.productId)}',ARRAYJOIN({productId})))`,
-          ) +
-          `&sort[0][field]=ledgerEntryId&sort[0][direction]=desc&maxRecords=1`;
-        const ledgerResult = await airtableFetch(ledgerUrl);
-        const lastEntry = ledgerResult?.records?.[0];
+        // Use getLedgerHistory (which correctly filters in memory) to find the last entry
+        const allLedger = await getLedgerHistory(params.businessUnitId, params.productId, 200);
+        const lastEntry = allLedger.length > 0 ? allLedger[allLedger.length - 1] : null;
         if (lastEntry) {
           const ledgerQty = Number(lastEntry.fields?.quantityAfter ?? 0);
           if (ledgerQty > 0) {
@@ -305,8 +346,11 @@ async function applyMovement(params: {
     return { ledgerEntryId: ledgerEntry.id, stockId: stockRecord.id, quantityBefore, quantityAfter };
   });
 }
-
-
+ 
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+ 
 export async function deductStock(params: {
   businessUnitId: string;
   productId: string;
