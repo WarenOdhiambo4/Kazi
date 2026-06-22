@@ -1,4 +1,4 @@
-
+<!-- aisrtable-schema-report.md -->
 
 ## Tables, Columns, and Relations
 

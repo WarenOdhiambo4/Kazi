@@ -10,7 +10,14 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["index.ts", "api/**/*.ts"]
+  "include": [
+    "index.ts",
+    "api/**/*.ts",
+    "services/**/*.ts",
+    "lib/**/*.ts"
+  ]
 }
