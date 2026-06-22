@@ -21,7 +21,7 @@
 // reconciliation job can re-derive InventoryStock.quantityOnHand from the full ledger
 // history later — we log loudly so this is never silent.
 
-import { withInventoryLock, withInventoryLocks } from '../lib/redisLock.js';
+import { withInventoryLock, withInventoryLocks } from '../api/lib/redisLock.js';
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY!;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID!;
