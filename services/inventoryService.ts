@@ -20,8 +20,7 @@
 // fails after the ledger write succeeds, the ledger entry is still correct and a
 // reconciliation job can re-derive InventoryStock.quantityOnHand from the full ledger
 // history later — we log loudly so this is never silent.
-
-import { withInventoryLock, withInventoryLocks } from '../api/lib/redisLock.js';
+import { withInventoryLock, withInventoryLocks } from '../lib/redisLock.js';
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY!;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID!;
